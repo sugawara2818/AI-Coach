@@ -1,0 +1,9 @@
+.env
+coach.db
+__pycache__/
+*.pyc
+.venv/
+.vscode/
+models_out.txt
+test_*.py
+list_*.py

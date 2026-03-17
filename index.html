@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Coach - 目標設定</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --card: rgba(255, 255, 255, 0.05);
+            --accent: #6c5ce7;
+            --text: #ffffff;
+            --text-dim: #a0a0a0;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            background: var(--card);
+            backdrop-filter: blur(20px);
+            padding: 40px;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.8s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #fff 0%, #a0a0a0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        p {
+            color: var(--text-dim);
+            margin-bottom: 32px;
+            font-weight: 300;
+        }
+        .form-group {
+            margin-bottom: 24px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: var(--text-dim);
+        }
+        input, textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+            color: #fff;
+            font-family: inherit;
+            font-size: 16px;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px rgba(108, 92, 231, 0.2);
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            background: var(--accent);
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        .success-overlay {
+            display: none;
+            text-align: center;
+        }
+        .success-overlay.active {
+            display: block;
+        }
+        form.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="form-container">
+            <h1>Set Your Goal</h1>
+            <p>あなたの目標を教えてください。AIコーチが伴走します。</p>
+            <form id="goal-form">
+                <div class="form-group">
+                    <label for="line_user_id">LINE User ID (Test用)</label>
+                    <input type="text" id="line_user_id" required placeholder="Uxxx...">
+                </div>
+                <div class="form-group">
+                    <label for="name">お名前</label>
+                    <input type="text" id="name" required placeholder="山田 太郎">
+                </div>
+                <div class="form-group">
+                    <label for="goal">具体的な目標</label>
+                    <textarea id="goal" rows="4" required placeholder="例: 1ヶ月で5kg痩せる、TOEIC 800点取る"></textarea>
+                </div>
+                <button type="submit">コーチングを開始する</button>
+            </form>
+        </div>
+        <div id="success-message" class="success-overlay">
+            <h1>Ready to Go!</h1>
+            <p>目標が設定されました。LINEでメッセージを確認してください。</p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('goal-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                line_user_id: document.getElementById('line_user_id').value,
+                name: document.getElementById('name').value,
+                goal: document.getElementById('goal').value
+            };
+
+            try {
+                const response = await fetch('/set_goal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    document.getElementById('form-container').classList.add('hidden');
+                    document.getElementById('success-message').classList.add('active');
+                }
+            } catch (err) {
+                alert('エラーが発生しました');
+            }
+        });
+    </script>
+</body>
+</html>
