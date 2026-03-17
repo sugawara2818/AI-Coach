@@ -25,12 +25,19 @@ async def startup_event():
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 
-line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
-handler = WebhookHandler(LINE_CHANNEL_SECRET)
+# Initialize safely to avoid crash if env vars are missing during build/first run
+line_bot_api = None
+handler = None
+if LINE_CHANNEL_ACCESS_TOKEN and LINE_CHANNEL_SECRET:
+    line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
+    handler = WebhookHandler(LINE_CHANNEL_SECRET)
+
 coach = CoachLogic()
 
 @app.post("/webhook")
 async def webhook(request: Request):
+    if not handler:
+        return "Webhook not configured"
     signature = request.headers.get("X-Line-Signature")
     body = await request.body()
     try:
@@ -89,7 +96,10 @@ def handle_message(event):
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
-    with open("index.html", "r", encoding="utf-8") as f:
+    # Fix pathing for Vercel
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(base_dir, "index.html")
+    with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
 
 @app.post("/set_goal")
