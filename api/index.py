@@ -37,8 +37,30 @@ def get_gemini_model():
     key = os.getenv("GEMINI_API_KEY")
     if key:
         genai.configure(api_key=key)
-        _gemini_model = genai.GenerativeModel('gemini-2.0-flash')
-    return _gemini_model
+        # We will try to get a model instance later when needed, or check what exists
+        # For now, we return the genai module or a placeholder helper
+        return True 
+    return None
+
+def get_actual_model():
+    # Try multiple common model names in order of reliability
+    models_to_try = [
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-pro',
+        'gemini-2.0-flash-exp',
+        'gemini-2.0-flash'
+    ]
+    
+    for model_name in models_to_try:
+        try:
+            model = genai.GenerativeModel(model_name)
+            # Try a very small generation to verify quota/existence
+            model.generate_content("ping", generation_config={"max_output_tokens": 1})
+            return model
+        except Exception:
+            continue
+    return None
 
 def get_db_connection():
     url = os.getenv("POSTGRES_URL")
@@ -58,9 +80,9 @@ def get_db_connection():
 
 # --- COACHING LOGIC ---
 def generate_ai_response(name, goal, user_message, proactive=False):
-    model = get_gemini_model()
+    model = get_actual_model()
     if not model:
-        return "AIコーチは現在準備中です（APIキーが設定されていません）。"
+        return "AIコーチは現在準備中です（利用可能なAIモデルが見つかりません）。APIキーの設定やクォータを確認してください。"
     
     if proactive:
         prompt = f"あなたは{name}さんの専属コーチです。{name}さんは「{goal}」という目標を持っています。最近の状況を伺い、励ますような短いメッセージを送ってください。"
@@ -166,6 +188,23 @@ async def home():
     </body>
     </html>
     """
+
+@app.get("/api/models")
+async def list_models_endpoint():
+    key = os.getenv("GEMINI_API_KEY")
+    if not key: return {"error": "API key not set"}
+    try:
+        genai.configure(api_key=key)
+        models = []
+        for m in genai.list_models():
+            models.append({
+                "name": m.name,
+                "display_name": m.display_name,
+                "supported_methods": m.supported_generation_methods
+            })
+        return {"available_models": models}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/api/health")
 async def health():
