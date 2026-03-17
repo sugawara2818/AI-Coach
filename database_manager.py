@@ -32,6 +32,7 @@ def init_db():
             goal TEXT,
             persona TEXT,
             frequency TEXT,
+            preferred_time TEXT, -- e.g., "17:00"
             last_interacted_at TIMESTAMP,
             next_ping_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -56,6 +57,7 @@ def init_db():
             goal TEXT,
             persona TEXT,
             frequency TEXT,
+            preferred_time TEXT, -- e.g., "17:00"
             last_interacted_at DATETIME,
             next_ping_at DATETIME,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP

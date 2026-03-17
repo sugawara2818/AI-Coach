@@ -97,6 +97,7 @@ async def set_goal(data: dict):
     line_user_id = data.get("line_user_id")
     name = data.get("name")
     goal = data.get("goal")
+    preferred_time = data.get("preferred_time", "17:00")
     
     if not line_user_id or not name or not goal:
         raise HTTPException(status_code=400, detail="Missing data")
@@ -104,21 +105,17 @@ async def set_goal(data: dict):
     conn = get_db_connection()
     cur = conn.cursor()
     
-    random_hours = random.randint(2, 6)
-    next_ping = datetime.now() + timedelta(hours=random_hours)
-    
     if os.getenv("POSTGRES_URL"):
         cur.execute('''
-            INSERT INTO users (line_user_id, name, goal, frequency, next_ping_at) 
+            INSERT INTO users (line_user_id, name, goal, frequency, preferred_time) 
             VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (line_user_id) DO UPDATE SET name = EXCLUDED.name, goal = EXCLUDED.goal, next_ping_at = EXCLUDED.next_ping_at
-        ''', (line_user_id, name, goal, "daily", next_ping))
+            ON CONFLICT (line_user_id) DO UPDATE SET name = EXCLUDED.name, goal = EXCLUDED.goal, preferred_time = EXCLUDED.preferred_time
+        ''', (line_user_id, name, goal, "daily", preferred_time))
     else:
-        next_ping_str = next_ping.strftime("%Y-%m-%d %H:%M:%S")
         cur.execute('''
-            INSERT OR REPLACE INTO users (line_user_id, name, goal, frequency, next_ping_at) 
+            INSERT OR REPLACE INTO users (line_user_id, name, goal, frequency, preferred_time) 
             VALUES (?, ?, ?, ?, ?)
-        ''', (line_user_id, name, goal, "daily", next_ping_str))
+        ''', (line_user_id, name, goal, "daily", preferred_time))
         
     conn.commit()
     cur.close()

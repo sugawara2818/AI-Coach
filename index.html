@@ -127,6 +127,10 @@
                     <label for="goal">具体的な目標</label>
                     <textarea id="goal" rows="4" required placeholder="例: 1ヶ月で5kg痩せる、TOEIC 800点取る"></textarea>
                 </div>
+                <div class="form-group">
+                    <label for="preferred_time">毎日状況を確認する時間</label>
+                    <input type="time" id="preferred_time" required value="17:00">
+                </div>
                 <button type="submit">コーチングを開始する</button>
             </form>
         </div>
@@ -142,7 +146,8 @@
             const data = {
                 line_user_id: document.getElementById('line_user_id').value,
                 name: document.getElementById('name').value,
-                goal: document.getElementById('goal').value
+                goal: document.getElementById('goal').value,
+                preferred_time: document.getElementById('preferred_time').value
             };
 
             try {
