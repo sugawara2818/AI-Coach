@@ -63,7 +63,11 @@ def get_db_connection():
             print(f"Postgres connection error: {e}")
             raise e
     else:
-        # Fallback to local SQLite for non-production environments
+        # If on Vercel, we MUST have POSTGRES_URL
+        if os.getenv("VERCEL"):
+            raise Exception("Vercel Postgres (POSTGRES_URL) is not configured. Please link a Postgres database in the Vercel dashboard.")
+        
+        # Fallback to local SQLite ONLY for local development
         conn = sqlite3.connect("coach.db")
         conn.row_factory = sqlite3.Row
         return conn
