@@ -42,25 +42,26 @@ def get_gemini_model():
         return True 
     return None
 
-def get_actual_model():
+def get_actual_model_with_error():
     # Try multiple common model names in order of reliability
     models_to_try = [
         'gemini-1.5-flash',
         'gemini-1.5-flash-latest',
         'gemini-1.5-pro',
-        'gemini-2.0-flash-exp',
         'gemini-2.0-flash'
     ]
     
+    errors = []
     for model_name in models_to_try:
         try:
             model = genai.GenerativeModel(model_name)
             # Try a very small generation to verify quota/existence
             model.generate_content("ping", generation_config={"max_output_tokens": 1})
-            return model
-        except Exception:
+            return model, None
+        except Exception as e:
+            errors.append(f"{model_name}: {str(e)}")
             continue
-    return None
+    return None, " | ".join(errors)
 
 def get_db_connection():
     url = os.getenv("POSTGRES_URL")
@@ -80,9 +81,9 @@ def get_db_connection():
 
 # --- COACHING LOGIC ---
 def generate_ai_response(name, goal, user_message, proactive=False):
-    model = get_actual_model()
+    model, error_details = get_actual_model_with_error()
     if not model:
-        return "AIコーチは現在準備中です（利用可能なAIモデルが見つかりません）。APIキーの設定やクォータを確認してください。"
+        return f"AIコーチは現在準備中です（利用可能なAIモデルが見つかりません）。\nエラー詳細: {error_details}"
     
     if proactive:
         prompt = f"あなたは{name}さんの専属コーチです。{name}さんは「{goal}」という目標を持っています。最近の状況を伺い、励ますような短いメッセージを送ってください。"
