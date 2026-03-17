@@ -134,6 +134,13 @@ async def cron_handler():
     send_proactive_messages()
     return {"status": "cron execution completed"}
 
+# Vercel DB Setup endpoint
+@app.get("/api/setup_db")
+async def setup_db_handler():
+    from database_manager import init_db
+    init_db()
+    return {"status": "Postgres initialized"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
