@@ -173,33 +173,79 @@ async def webhook(request: Request):
 
 # Inlined handler to keep everything in one file
 line_handler = get_line_handler()
+line_bot_api = get_line_api() # Initialize LineBotApi globally for the handler
 if line_handler:
     @line_handler.add(MessageEvent, message=TextMessage)
-    def handle_message(event):
+    def handle_line_message(event):
+        if not line_bot_api: return
         u_id = event.source.user_id
-        text = event.message.text
+        text = event.message.text.strip()
         
         conn = get_db_connection()
         cur = conn.cursor()
+        
+        # Get user state
         if os.getenv("POSTGRES_URL"):
-            cur.execute("SELECT name, goal FROM users WHERE line_user_id = %s", (u_id,))
+            cur.execute("SELECT name, goal, preferred_time, onboarding_step FROM users WHERE line_user_id = %s", (u_id,))
         else:
-            cur.execute("SELECT name, goal FROM users WHERE line_user_id = ?", (u_id,))
+            cur.execute("SELECT name, goal, preferred_time, onboarding_step FROM users WHERE line_user_id = ?", (u_id,))
         user = cur.fetchone()
         
-        if not user:
-            reply = "目標が設定されていません。ウェブサイトから設定してください。"
-        else:
-            # Handle both dict-like and tuple-like row access
+        # Standardize row access
+        u_name, u_goal, u_time, u_step = None, None, None, 0
+        if user:
             try:
-                name, goal = (user[0], user[1]) if not hasattr(user, 'keys') else (user['name'], user['goal'])
-            except:
-                name, goal = user[0], user[1]
-            reply = generate_ai_response(name, goal, text)
+                u_name, u_goal, u_time, u_step = (user[0], user[1], user[2], user[3]) if not hasattr(user, 'keys') else (user['name'], user['goal'], user['preferred_time'], user['onboarding_step'])
+            except Exception: # Fallback for older user entries or missing columns
+                u_name, u_goal, u_time = (user[0], user[1], user[2]) if not hasattr(user, 'keys') else (user['name'], user['goal'], user['preferred_time'])
+                u_step = 4 # Assume fully onboarded if step is missing
         
-        line_api = get_line_api()
-        if line_api:
-            line_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+        reply = ""
+        
+        # --- ONBOARDING FLOW ---
+        if u_step < 4:
+            if u_step == 0: # New User -> Ask Name
+                if os.getenv("POSTGRES_URL"):
+                    cur.execute("INSERT INTO users (line_user_id, onboarding_step) VALUES (%s, 1) ON CONFLICT (line_user_id) DO UPDATE SET onboarding_step = 1", (u_id,))
+                else:
+                    cur.execute("INSERT OR REPLACE INTO users (line_user_id, onboarding_step) VALUES (?, 1)", (u_id,))
+                reply = "はじめまして！あなたの目標達成を全力でサポートするAIコーチです。\n\nまずは、あなたの[お名前]を教えてください（コーチからの呼び名になります）。"
+            
+            elif u_step == 1: # Got Name -> Ask Goal
+                if os.getenv("POSTGRES_URL"):
+                    cur.execute("UPDATE users SET name = %s, onboarding_step = 2 WHERE line_user_id = %s", (text, u_id))
+                else:
+                    cur.execute("UPDATE users SET name = ?, onboarding_step = 2 WHERE line_user_id = ?", (text, u_id))
+                reply = f"ありがとうございます、{text}さん！\n\n次に、あなたが達成したい[具体的な目標]を教えてください。"
+                
+            elif u_step == 2: # Got Goal -> Ask Time
+                if os.getenv("POSTGRES_URL"):
+                    cur.execute("UPDATE users SET goal = %s, onboarding_step = 3 WHERE line_user_id = %s", (text, u_id))
+                else:
+                    cur.execute("UPDATE users SET goal = ?, onboarding_step = 3 WHERE line_user_id = ?", (text, u_id))
+                reply = "素晴らしい目標ですね！一緒に頑張りましょう。\n\n最後に、毎日何時に状況を確認してほしいですか？[17:00]のように24時間表記で教えてください。"
+                
+            elif u_step == 3: # Got Time -> Finish
+                # Simple time format check (optional but good)
+                if ":" in text and len(text) <= 5 and text.replace(':', '').isdigit():
+                    if os.getenv("POSTGRES_URL"):
+                        cur.execute("UPDATE users SET preferred_time = %s, onboarding_step = 4 WHERE line_user_id = %s", (text, u_id))
+                    else:
+                        cur.execute("UPDATE users SET preferred_time = ?, onboarding_step = 4 WHERE line_user_id = ?", (text, u_id))
+                    reply = f"設定が完了しました！これから毎日 {text} に状況を伺いに来ますね。\n\n目標達成に向けて、今日からよろしくお願いします！"
+                else:
+                    reply = "すみません、時間の形式が正しくないようです。[17:00]のように教えていただけますか？"
+            
+            conn.commit()
+        
+        # --- NORMAL CONVERSATION ---
+        else:
+            if not u_name or not u_goal:
+                reply = "目標が設定されていません。ウェブサイトから設定するか、再度オンボーディングを開始してください。"
+            else:
+                reply = generate_ai_response(u_name, u_goal, text)
+        
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
         cur.close()
         conn.close()
 
@@ -263,18 +309,39 @@ async def setup_db():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                line_user_id TEXT PRIMARY KEY,
-                name TEXT,
-                goal TEXT,
-                preferred_time TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+        
+        # Base table creation
+        if os.getenv("POSTGRES_URL"):
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    line_user_id TEXT PRIMARY KEY,
+                    name TEXT,
+                    goal TEXT,
+                    preferred_time TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            # Add onboarding_step if missing
+            try:
+                cur.execute("ALTER TABLE users ADD COLUMN onboarding_step INTEGER DEFAULT 4")
+            except:
+                conn.rollback() # Column likely exists
+            conn.commit()
+        else:
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    line_user_id TEXT PRIMARY KEY,
+                    name TEXT,
+                    goal TEXT,
+                    preferred_time TEXT,
+                    onboarding_step INTEGER DEFAULT 4,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+        
         conn.commit()
         cur.close()
         conn.close()
-        return {"status": "initialized"}
+        return {"status": "initialized and updated"}
     except Exception as e:
         return PlainTextResponse(traceback.format_exc(), status_code=500)
