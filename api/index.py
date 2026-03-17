@@ -37,7 +37,7 @@ def get_gemini_model():
     key = os.getenv("GEMINI_API_KEY")
     if key:
         genai.configure(api_key=key)
-        _gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+        _gemini_model = genai.GenerativeModel('gemini-2.0-flash')
     return _gemini_model
 
 def get_db_connection():
